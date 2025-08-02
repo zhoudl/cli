@@ -38,12 +38,6 @@ jobs:
         OBS_ENDPOINT: ${{ secrets.HUAWEI_OBS_ENDPOINT }}
       run: |
         mkdir -p ~/.obs
-        cat > ~/.obs/credentials <<EOF
-[default]
-access_key_id = ${OBS_ACCESS_KEY_ID}
-secret_access_key = ${OBS_SECRET_ACCESS_KEY}
-endpoint = ${OBS_ENDPOINT}
-EOF
 
     - name: Upload to Huawei OBS
       env:
