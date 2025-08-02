@@ -2,8 +2,6 @@ name: Download from Google and Upload to Huawei OBS (obsutil)
 
 on:
   workflow_dispatch:  # 手动触发
-  schedule:
-    - cron: '0 0 * * *'  # 可选：每日自动执行
 
 jobs:
   download-and-upload:
