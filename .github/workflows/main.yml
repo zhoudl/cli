@@ -1,53 +1,61 @@
-name: Download from Google and Upload to Huawei OBS
+name: Download from Google and Upload to Huawei OBS (obsutil)
+
 on:
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:  # 手动触发
+  schedule:
+    - cron: '0 0 * * *'  # 可选：每日自动执行
 
 jobs:
   download-and-upload:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Install dependencies (curl, wget)
       run: |
         sudo apt-get update
-        sudo apt-get install -y curl wget python3-pip
-        pip3 install obscli
+        sudo apt-get install -y curl wget
 
     - name: Download pixel_7_pro.tar.gz from Google
       run: |
-        # 替换为实际的Google下载URL
+        # 替换为实际的 Google 下载 URL（示例）
         DOWNLOAD_URL="https://android.googlesource.com/platform/tools/adt/idea/+archive/refs/heads/mirror-goog-studio-main/artwork/resources/device-art-resources/pixel_7_pro.tar.gz"
-        wget -O pixel_7_pro.tar.gz "$DOWNLOAD_URL"
+        wget -O pixel_7_pro.tar.gz "$DOWNLOAD_URL" || { echo "Download failed!"; exit 1; }
         
-        # 检查文件是否下载成功
-        if [ ! -f pixel_7_pro.tar.gz ]; then
-          echo "Download failed!"
-          exit 1
-        fi
-        
-        # 计算文件哈希（可选）
+        # 生成校验文件（可选）
         sha256sum pixel_7_pro.tar.gz > pixel_7_pro.tar.gz.sha256
 
-    - name: Configure Huawei OBS CLI
-      env:
-        OBS_ACCESS_KEY_ID: ${{ secrets.HUAWEI_OBS_ACCESS_KEY }}
-        OBS_SECRET_ACCESS_KEY: ${{ secrets.HUAWEI_OBS_SECRET_KEY }}
-        OBS_ENDPOINT: ${{ secrets.HUAWEI_OBS_ENDPOINT }}
+    - name: Install Huawei obsutil
       run: |
-        mkdir -p ~/.obs
+        # 下载并安装华为 obsutil 工具（Linux 64位版本）
+        OBSUTIL_URL="https://obs-community.obs.cn-north-1.myhuaweicloud.com/obsutil/current/obsutil_linux_amd64.tar.gz"
+        wget -O obsutil.tar.gz "$OBSUTIL_URL"
+        tar -xzf obsutil.tar.gz
+        sudo mv obsutil_linux_amd64_*/obsutil /usr/local/bin/
+        chmod +x /usr/local/bin/obsutil
+        obsutil version  # 验证安装
+
+    - name: Configure obsutil
+      env:
+        HUAWEI_OBS_AK: ${{ secrets.HUAWEI_OBS_ACCESS_KEY }}
+        HUAWEI_OBS_SK: ${{ secrets.HUAWEI_OBS_SECRET_KEY }}
+        HUAWEI_OBS_ENDPOINT: ${{ secrets.HUAWEI_OBS_ENDPOINT }}
+      run: |
+        # 配置 obsutil 认证信息
+        obsutil config -i=${HUAWEI_OBS_AK} -k=${HUAWEI_OBS_SK} -e=${HUAWEI_OBS_ENDPOINT}
+        obsutil ls -s  # 测试连接
 
     - name: Upload to Huawei OBS
       env:
-        OBS_BUCKET_NAME: ${{ secrets.HUAWEI_OBS_BUCKET }}
+        HUAWEI_OBS_BUCKET: ${{ secrets.HUAWEI_OBS_BUCKET }}
       run: |
-        # 使用obscli上传文件
-        obscli cp pixel_7_pro.tar.gz obs://${OBS_BUCKET_NAME}/pixel_7_pro.tar.gz
+        # 上传文件到 OBS（启用分段上传优化大文件）
+        obsutil cp pixel_7_pro.tar.gz obs://${HUAWEI_OBS_BUCKET}/pixel_7_pro.tar.gz -f -p 8
         
         # 可选：上传校验文件
-        obscli cp pixel_7_pro.tar.gz.sha256 obs://${OBS_BUCKET_NAME}/pixel_7_pro.tar.gz.sha256
+        obsutil cp pixel_7_pro.tar.gz.sha256 obs://${HUAWEI_OBS_BUCKET}/pixel_7_pro.tar.gz.sha256 -f
 
-        # 检查上传是否成功
-        obscli ls obs://${OBS_BUCKET_NAME}/pixel_7_pro.tar.gz
+        # 验证文件是否存在
+        obsutil ls obs://${HUAWEI_OBS_BUCKET}/pixel_7_pro.tar.gz
