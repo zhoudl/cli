@@ -1,0 +1,59 @@
+name: Download from Google and Upload to Huawei OBS
+on:
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  download-and-upload:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y curl wget python3-pip
+        pip3 install obscli
+
+    - name: Download pixel_7_pro.tar.gz from Google
+      run: |
+        # 替换为实际的Google下载URL
+        DOWNLOAD_URL="https://android.googlesource.com/platform/tools/adt/idea/+archive/refs/heads/mirror-goog-studio-main/artwork/resources/device-art-resources/pixel_7_pro.tar.gz"
+        wget -O pixel_7_pro.tar.gz "$DOWNLOAD_URL"
+        
+        # 检查文件是否下载成功
+        if [ ! -f pixel_7_pro.tar.gz ]; then
+          echo "Download failed!"
+          exit 1
+        fi
+        
+        # 计算文件哈希（可选）
+        sha256sum pixel_7_pro.tar.gz > pixel_7_pro.tar.gz.sha256
+
+    - name: Configure Huawei OBS CLI
+      env:
+        OBS_ACCESS_KEY_ID: ${{ secrets.HUAWEI_OBS_ACCESS_KEY }}
+        OBS_SECRET_ACCESS_KEY: ${{ secrets.HUAWEI_OBS_SECRET_KEY }}
+        OBS_ENDPOINT: ${{ secrets.HUAWEI_OBS_ENDPOINT }}
+      run: |
+        mkdir -p ~/.obs
+        cat > ~/.obs/credentials <<EOF
+[default]
+access_key_id = ${OBS_ACCESS_KEY_ID}
+secret_access_key = ${OBS_SECRET_ACCESS_KEY}
+endpoint = ${OBS_ENDPOINT}
+EOF
+
+    - name: Upload to Huawei OBS
+      env:
+        OBS_BUCKET_NAME: ${{ secrets.HUAWEI_OBS_BUCKET }}
+      run: |
+        # 使用obscli上传文件
+        obscli cp pixel_7_pro.tar.gz obs://${OBS_BUCKET_NAME}/pixel_7_pro.tar.gz
+        
+        # 可选：上传校验文件
+        obscli cp pixel_7_pro.tar.gz.sha256 obs://${OBS_BUCKET_NAME}/pixel_7_pro.tar.gz.sha256
+
+        # 检查上传是否成功
+        obscli ls obs://${OBS_BUCKET_NAME}/pixel_7_pro.tar.gz
